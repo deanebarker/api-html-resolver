@@ -12,7 +12,7 @@ Essentially it sits "between" a client and an API to translate HTML included in 
 
 This is not JSONata -- this doesn't transform the structure of the JSON itself. Rather, it examines that JSON for HTML in specific properties, and it changes _that_.
 
->Note that this tool was originally developed as a research project around the Staffbase API. However, its purpose and function turned out to be generic to any web-based API.
+> Note that this tool was originally developed as a research project around the Staffbase API. However, its purpose and function turned out to be generic to any web-based API.
 
 ## The config Object
 
@@ -34,7 +34,7 @@ The JSON response from the origin will be parsed into an object and passed to `c
 
 `config.getPropertyPaths()` should return an array of "paths" to the properties that need to be examinded the correct. These paths are a series of property names, seperated by forward slashes.
 
->Note: this is one part I'm not sure about. I considered using JSONata, which has query capabilities, but I need to parse it into an object, so I'm not sure how well that would work. This works for now, but should be examined in the future.
+> Note: this is one part I'm not sure about. I considered using JSONata, which has query capabilities, but I need to parse it into an object, so I'm not sure how well that would work. This works for now, but should be examined in the future.
 
 The "leaf" properties at the end of each path string are assumed to be HTML and will be parsed and resolved.
 
@@ -66,6 +66,37 @@ The four possible resolution scenarios:
 
 - **Neither template nor controller:** The app will pass the entire element to the function in `config.unknownElementController()` and swap the output in for the original element.
 
+Example element to be resolved
+
+```html
+<user-profile data-user-id="123"></user-profile>
+```
+
+Example controller: **userProfile.js**. This gets the entire element as a JSDOM node, and the API request from Express.
+
+```js
+export default function handleUserProfile(element, req)
+{
+  let id = element.dataset.userId;
+  let userData = await fetch("https://myapi.com/users/" + id);
+  // { firstName: "Deane", lastName: "Barker" }
+  userData.id = id;
+  return userData;
+}
+```
+
+Example Template: **userProfile.liquid**. This gets an object with the output of the controller above as the `data` key, the original element as the `elementName` key, and request data under `query`, `url`, and `headers`.
+
+```twig
+<div class="user-card">
+    <label>First Name</label> {{ data.firstName }}
+    <label>Last Name</label> {{ data.lastName }}
+    <p>
+      <a href="/profile/{{ data.id}}">View Profile</a>
+    </p>
+</div>
+```
+
 ## Finishing up
 
 Once all HTML and objects are resolved, a few logging properties are added to the response, and it is sent back as JSON.
@@ -76,7 +107,7 @@ Once all HTML and objects are resolved, a few logging properties are added to th
 
 Sure. `config.getHtmlEndpoint()` will provide an API to which you can POST your HTML as the raw body of the request. That HTML will be resolved according to the same process defined above, and sent back in the response.
 
->For some users, this might be the only thing used. It exposes the general HTML transformation logic. In those situations, the API proxy and JSON inspection parts of the app can simply be ignored.
+> For some users, this might be the only thing used. It exposes the general HTML transformation logic. In those situations, the API proxy and JSON inspection parts of the app can simply be ignored.
 
 You can shut this feature off by just returning `null` from `config.getHtmlEndpoint()`.
 
@@ -84,20 +115,18 @@ You can shut this feature off by just returning `null` from `config.getHtmlEndpo
 
 Yes. The request is globally available, using AsyncLocalStorage. To get the request context in any code:
 
-```
+```javascript
 import { request } from "./requestContext.js";
 const req = request.get();
 ```
 
 If you call your API with a querystring argument --
 
-```
-https://api.myapp.com/api/get-something/123?channel=mobile
-```
+`https://api.myapp.com/api/get-something/123?channel=mobile`
 
 Then you can get that querystring argument --
 
-```
+```javascript
 let channel = req.query.channel;
 ```
 
@@ -115,7 +144,7 @@ No. `config.getControllerPath()` and `config.getTemplatePath()` can return absol
 
 That's up to you. Clearly, you're going to use the element name in some form, but you control what `config.getControllerPath` and `config.getTemplatePath` return, so do whatever you like.
 
->Should those methods return strings (the file contents) instead of paths? Is it wrong to assume the code will always be on the local file system? Maybe you might want to get code from somewhere else?
+> Should those methods return strings (the file contents) instead of paths? Is it wrong to assume the code will always be on the local file system? Maybe you might want to get code from somewhere else?
 
 ### Can I only identify elements by tag name?
 
