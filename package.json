@@ -1,0 +1,21 @@
+{
+  "name": "apiproxyresolver",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/app.js"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.10.0",
+    "express": "^5.1.0",
+    "jsdom": "^26.1.0",
+    "liquidjs": "^10.21.1",
+    "winston": "^3.17.0"
+  }
+}
