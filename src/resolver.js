@@ -2,7 +2,7 @@ import { JSDOM } from "jsdom";
 import fs from "fs"
 import logger from "./logger.js";
 import config from "./config.js";
-import { reqVar } from "./requestContext.js";
+import { request } from "./requestContext.js";
 
 
 async function resolveElement(element)
@@ -19,7 +19,7 @@ async function resolveElement(element)
     If neither exists, it will be routed to the unknown resolver, which will just return the element as is.
     */
 
-  const req = reqVar.get();
+  const req = request.get();
 
   // Determine the element name
   const elementName = config.getElementName(element, req);

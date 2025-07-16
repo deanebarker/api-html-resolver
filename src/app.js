@@ -3,7 +3,7 @@ import axios from "axios";
 import { resolveObject, resolveHtml } from "./resolver.js";
 import logger from "./logger.js";
 import config from "./config.js";
-import { reqVar } from "./requestContext.js";
+import { request } from "./requestContext.js";
 
 const app = express();
 app.use(express.json()); // to support JSON-encoded bodies
@@ -15,7 +15,7 @@ if(config.getHtmlEndpoint())
   app.use(config.getHtmlEndpoint(), express.raw({ type: "*/*" }));
   app.post(config.getHtmlEndpoint(), async (req, res) =>
   {
-    reqVar.set(req); // Set the request globally
+    request.set(req); // Set the request globally
 
     try
     {
@@ -33,7 +33,7 @@ if(config.getHtmlEndpoint())
 // This is for a proxied API call
 app.use(async (req, res) =>
 {
-  reqVar.set(req); // Set the request globally
+  request.set(req); // Set the request globally
 
   res.locals.log = [];
   logger.info(`Received request: ${req.method} ${req.originalUrl}`);
