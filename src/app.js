@@ -3,6 +3,7 @@ import axios from "axios";
 import { resolveObject, resolveHtml } from "./resolver.js";
 import logger from "./logger.js";
 import config from "./config.js";
+import { reqVar } from "./requestContext.js";
 
 const app = express();
 app.use(express.json()); // to support JSON-encoded bodies
@@ -14,9 +15,11 @@ if(config.getHtmlEndpoint())
   app.use(config.getHtmlEndpoint(), express.raw({ type: "*/*" }));
   app.post(config.getHtmlEndpoint(), async (req, res) =>
   {
+    reqVar.set(req); // Set the request globally
+
     try
     {
-      const result  = await resolveHtml(req.body, req);
+      const result  = await resolveHtml(req.body);
       res.status(200).send(result);
     }
     catch (err)
@@ -30,11 +33,13 @@ if(config.getHtmlEndpoint())
 // This is for a proxied API call
 app.use(async (req, res) =>
 {
+  reqVar.set(req); // Set the request globally
+
   res.locals.log = [];
   logger.info(`Received request: ${req.method} ${req.originalUrl}`);
 
   try
-  {  
+  {
     // Transform the existing request to point at the origin
     let newConfig = config.getModifiedRequest(req);
 
@@ -47,8 +52,12 @@ app.use(async (req, res) =>
 
     // Resolve the response data
     const tsStartResolution = Date.now();
-    await Promise.all(config.getObjectReferences(response.data).map((obj) => resolveObject(obj, req)));
-    res.locals.log.push(`Resolution time: ${Date.now() - tsStartResolution} ms`);
+    await Promise.all(
+      config.getObjectReferences(response.data).map((obj) => resolveObject(obj))
+    );
+    res.locals.log.push(
+      `Resolution time: ${Date.now() - tsStartResolution} ms`
+    );
 
     // Send resolved request back
     response.data._log = res.locals.log;

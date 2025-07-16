@@ -2,9 +2,13 @@ import { JSDOM } from "jsdom";
 import fs from "fs"
 import logger from "./logger.js";
 import config from "./config.js";
+import { reqVar } from "./requestContext.js";
 
-async function resolveElement(element, req)
+
+async function resolveElement(element)
 {
+
+
   /*
     Possible paths to resolution:
 
@@ -14,6 +18,8 @@ async function resolveElement(element, req)
     
     If neither exists, it will be routed to the unknown resolver, which will just return the element as is.
     */
+
+  const req = reqVar.get();
 
   // Determine the element name
   const elementName = config.getElementName(element, req);
@@ -95,7 +101,7 @@ async function resolveElement(element, req)
   }
 }
 
-export async function resolveHtml(html, req)
+export async function resolveHtml(html)
 {
   const dom = new JSDOM(html);
   const document = dom.window.document;
@@ -106,18 +112,18 @@ export async function resolveHtml(html, req)
   );
 
   await Promise.all(
-    elementsToResolve.map((element) => resolveElement(element, req))
+    elementsToResolve.map((element) => resolveElement(element))
   );
   return document.body.innerHTML;
 }
 
-export async function resolveObject(obj, req)
+export async function resolveObject(obj)
 {
   //await traverseAndModifyAll(obj, "contents/en_US/content", resolveHtml);
   const pathsToResolve = config.getPropertyPaths();
   for(const path of pathsToResolve)
   {
-    await traverseAndModifyAll(obj, path, resolveHtml, req);
+    await traverseAndModifyAll(obj, path, resolveHtml);
   }
   console.log("Returning object");
   return obj;
@@ -143,28 +149,28 @@ function folderExistsSync(folderPath)
 }
 
 // This sucks...
-async function traverseAndModifyAll(obj, pathStr, callback, req) {
+async function traverseAndModifyAll(obj, pathStr, callback) {
   // Clean up the path string: remove leading/trailing slashes and split
   const pathSegments = pathStr.replace(/^\/+|\/+$/g, "").split("/");
 
-  async function search(current, pathIndex, req) {
+  async function search(current, pathIndex) {
     if (typeof current !== "object" || current === null) return;
 
     for (const [key, value] of Object.entries(current)) {
       if (key === pathSegments[pathIndex]) {
         if (pathIndex === pathSegments.length - 1) {
-          current[key] = await callback(value, req); // full match
+          current[key] = await callback(value); // full match
         } else if (typeof value === "object" && value !== null) {
-          await search(value, pathIndex + 1, req);
+          await search(value, pathIndex + 1);
         }
       }
 
       // Search unrelated branches too
       if (typeof value === "object" && value !== null) {
-        await search(value, 0, req);
+        await search(value, 0);
       }
     }
   }
 
-  await search(obj, 0, req);
+  await search(obj, 0);
 }
