@@ -138,3 +138,9 @@ You can also "comment out" the entire element by returning `<!-- ${element.outer
 Well, ideally don't mark it as resolvable -- meaning don't return true from `config.isElementResolvable()` -- and it will be ignored.
 
 If for whatever reason, you need to make a single exception, return `element.outerHTML` from the controller. You'll essentially replace it with itself.
+
+### How is the performance?
+
+No idea, but it likely depends on what you do in the controllers. Maybe use a caching layer?
+
+(It wouldn't be hard to add crude caching, but the trick is always in the details. Cache subtleties can be really painful...)
