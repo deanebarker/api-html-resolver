@@ -80,6 +80,33 @@ Sure. `config.getHtmlEndpoint()` will provide an API to which you can POST your 
 
 You can shut this feature off by just returning `null` from `config.getHtmlEndpoint()`.
 
+### How can I return different HTML resolutions for different channels?
+
+Yes. The request is globally available, using AsyncLocalStorage. To get the request context in any code:
+
+```
+import { request } from "./requestContext.js";
+const req = request.get();
+```
+
+If you call your API with a querystring argument --
+
+```
+https://api.myapp.com/api/get-something/123?channel=mobile
+```
+
+Then you can get that querystring argument --
+
+```
+let channel = req.query.channel;
+```
+
+Using that, you can --
+
+1. Return a different controller or template path from `config.getControllerPath()` or `config.getTemplatePath()`
+2. Alter your logic in any controller
+3. Use the request values in your template, which are passed in as `query`, `headers`, and `url` (in the example, use `query.channel`)
+
 ### Do my controllers and templates have to be part of the project/codebase?
 
 No. `config.getControllerPath()` and `config.getTemplatePath()` can return absolute paths to wherever those files are located.
