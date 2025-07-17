@@ -1,14 +1,10 @@
 import { JSDOM } from "jsdom";
-import fs from "fs"
+import fs from "fs";
 import logger from "./logger.js";
 import config from "./config.js";
 import { request } from "./requestContext.js";
 
-
-async function resolveElement(element)
-{
-
-
+async function resolveElement(element) {
   /*
     Possible paths to resolution:
 
@@ -29,11 +25,12 @@ async function resolveElement(element)
 
   // Controller
   let controller;
-  if (fileExistsSync(config.getControllerPath(elementName, req)))
-  {
+  if (fileExistsSync(config.getControllerPath(elementName, req))) {
     // Compile the found controller
     try {
-      controller = await import(config.getControllerImportPath(elementName, req));
+      controller = await import(
+        config.getControllerImportPath(elementName, req)
+      );
     } catch (err) {
       logger.error(
         "Error compiling controller for " + elementName + ": " + err.message
@@ -50,10 +47,9 @@ async function resolveElement(element)
       );
 
       // If the controller returns false, we remove the element
-      if (!controllerReturnValue)
-      {
-          element.remove();
-          return;
+      if (!controllerReturnValue) {
+        element.remove();
+        return;
       }
       templateData = controllerReturnValue;
     } catch (err) {
@@ -62,31 +58,26 @@ async function resolveElement(element)
       );
       return;
     }
-  }
-  else
-  {
-    templateData = config.unknownElementController(element, elementName);
+  } else {
+    templateData = config.defaultElementController(element, elementName, req);
   }
 
   // Template
   const pathToTemplate = config.getTemplatePath(elementName);
-  if (fileExistsSync(pathToTemplate))
-  {
+  if (fileExistsSync(pathToTemplate)) {
     const templateSource = fs.readFileSync(pathToTemplate, "utf8");
-    const context ={
-        data: templateData ?? element,
-        elementName,
-        query: req?.query,
-        headers: req?.headers,
-        url: req?.url
-      }
+    const context = {
+      data: templateData ?? element,
+      elementName,
+      query: req?.query,
+      headers: req?.headers,
+      url: req?.url,
+    };
     replaceValue(
       element,
       await config.executeTemplate(templateSource, context)
     );
-  }
-  else
-  {
+  } else {
     replaceValue(element, templateData);
   }
 
@@ -101,8 +92,10 @@ async function resolveElement(element)
   }
 }
 
-export async function resolveHtml(html)
-{
+export async function resolveHtml(html, propertyStack) {
+
+  logger.info(`Resolving HTML with property stack: ${propertyStack ? propertyStack.join(" > ") : "<root>"}`);
+
   const dom = new JSDOM(html);
   const document = dom.window.document;
   const allElements = Array.from(document.querySelectorAll("*"));
@@ -117,14 +110,8 @@ export async function resolveHtml(html)
   return document.body.innerHTML;
 }
 
-export async function resolveObject(obj)
-{
-  //await traverseAndModifyAll(obj, "contents/en_US/content", resolveHtml);
-  const pathsToResolve = config.getPropertyPaths();
-  for(const path of pathsToResolve)
-  {
-    await traverseAndModifyAll(obj, path, resolveHtml);
-  }
+export async function resolveObject(obj) {
+  await traverseAndProcessHTML(obj, resolveHtml);
   console.log("Returning object");
   return obj;
 }
@@ -137,40 +124,35 @@ function fileExistsSync(filePath) {
   }
 }
 
-function folderExistsSync(folderPath)
-{
-    const exists = fs.existsSync(folderPath);
-    if(!exists) return false;
+// This iterates every property on an object, recursively, including all elements in arrays, and executes a callback for each property value that is a string containing HTML.
+// Disclaimer: this specific function was vibe-coded by ChaptGPT
+async function traverseAndProcessHTML(obj, callback) {
+  const isObject = (val) =>
+    val && typeof val === "object" && !Array.isArray(val);
 
-    const isDirectory = fs.statSync(folderPath).isDirectory();
-    if(!isDirectory) return false;
-
-    return true;
-}
-
-// This sucks...
-async function traverseAndModifyAll(obj, pathStr, callback) {
-  // Clean up the path string: remove leading/trailing slashes and split
-  const pathSegments = pathStr.replace(/^\/+|\/+$/g, "").split("/");
-
-  async function search(current, pathIndex) {
-    if (typeof current !== "object" || current === null) return;
-
-    for (const [key, value] of Object.entries(current)) {
-      if (key === pathSegments[pathIndex]) {
-        if (pathIndex === pathSegments.length - 1) {
-          current[key] = await callback(value); // full match
-        } else if (typeof value === "object" && value !== null) {
-          await search(value, pathIndex + 1);
+  async function recurse(current, path = []) {
+    for (const key in current) {
+      if (!current.hasOwnProperty(key)) continue;
+      const value = current[key];
+      const newPath = [...path, key];
+      if (typeof value === "string" && /<\/?[a-z][\s\S]*>/i.test(value)) {
+        current[key] = await callback(value, newPath); // <-- assign result back
+      } else if (isObject(value)) {
+        await recurse(value, newPath);
+      } else if (Array.isArray(value)) {
+        for (let index = 0; index < value.length; index++) {
+          const item = value[index];
+          if (isObject(item)) {
+            await recurse(item, [...newPath, index]);
+          } else if (
+            typeof item === "string" &&
+            /<\/?[a-z][\s\S]*>/i.test(item)
+          ) {
+            value[index] = await callback(item, newPath); // <-- assign result back
+          }
         }
-      }
-
-      // Search unrelated branches too
-      if (typeof value === "object" && value !== null) {
-        await search(value, 0);
       }
     }
   }
-
-  await search(obj, 0);
+  await recurse(obj);
 }

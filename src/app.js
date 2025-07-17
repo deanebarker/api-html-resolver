@@ -52,9 +52,7 @@ app.use(async (req, res) =>
 
     // Resolve the response data
     const tsStartResolution = Date.now();
-    await Promise.all(
-      config.getObjectReferences(response.data).map((obj) => resolveObject(obj))
-    );
+    await resolveObject(response.data);
     res.locals.log.push(
       `Resolution time: ${Date.now() - tsStartResolution} ms`
     );

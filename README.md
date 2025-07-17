@@ -12,51 +12,67 @@ Essentially it sits "between" a client and an API to translate HTML included in 
 
 This is not JSONata -- this doesn't transform the structure of the JSON itself. Rather, it examines that JSON for HTML in specific properties, and it changes _that_.
 
-> Note that this tool was originally developed as a research project around the Staffbase API. However, its purpose and function turned out to be generic to any web-based API.
+> Note that this tool was originally developed as a research project around the [Staffbase](https://staffbase.com/) API. However, its purpose and function turned out to be generic to any web-based API, and the logical method of HTML "resolution" is independent of even an API contact -- at its base level, it's just creative string manipulation.
 
 ## The config Object
 
-The object in `config.js` has a set of functions that comprise all necessary customizations to implement the proxy in your own enviroment. You shouldn't need to modify the main app files.
+The object in `config.js` has a set of functions that comprise all necessary customizations to implement the app in your own enviroment. You shouldn't need to modify the main app files outside of `config.js`.
 
-The functions in this file are clearly documented. Most will be discussed below.
+The functions in that file are discussed below.
+
+The existing `config.js` has been used against the Staffbase API specifically, but should make sense in the context of anything else.
 
 ## Proxying the Request
 
-Any inbound request is passed to `config.getModifiedRequest()`. That function should return an [Axios config object](https://axios-http.com/docs/req_config) representing the request to be made to the origin API.
+Any inbound request (except one route; see below) is passed to `config.getModifiedRequest()`. That function should return an [Axios config object](https://axios-http.com/docs/req_config) representing the request to be made to the origin API.
 
-Most often, you'll simply change the URL to a new host, but you're free to do whatever you want to the URL, add headers, etc.
+Most often, you'll simply change the URL to a new host, but you're free to modify the URL, the headers, the querystring, whatever.
 
-## Identifying the objects in the response
+## Identifying the elements in HTML to resolve
 
-The JSON response from the origin will be parsed into an object and passed to `config.getObjectReferences()`. That function should return an array representing the individual objects to be examined.
+The response object will be inspected and properties containing HTML will be automatically identified.
 
-## Identifying the HTML properties to resolve
-
-`config.getPropertyPaths()` should return an array of "paths" to the properties that need to be examinded the correct. These paths are a series of property names, seperated by forward slashes.
-
-> Note: this is one part I'm not sure about. I considered using JSONata, which has query capabilities, but I need to parse it into an object, so I'm not sure how well that would work. This works for now, but should be examined in the future.
-
-The "leaf" properties at the end of each path string are assumed to be HTML and will be parsed and resolved.
-
-## Identifying the elements in the HTML to resolve
-
-The HTML from each property will be parsed, and every element will be passed to `config.isResolvableElement()`. If this returns `true`, the app will attempt to resolve that element.
+The HTML from each identified property will be parsed, and every element will be passed to `config.isResolvableElement()`. If this function returns truthy, the app will attempt to resolve that element.
 
 ## How elements are resolved
 
-This app uses JSDOM under the hood. Element resolution will work off the element as an extracted node.
+The app uses JSDOM under the hood. Element resolution will work off the element as an extracted node.
 
 The element will be passed to `config.getElementName()` to identify the element by a simple text string.
 
 The app will use this name to look for two files:
 
-1. **Controller:** The element name will be passed to `config.getControllerPath()`. That function should return a file path to a JS file, or null if no controller exists. This JS file should have a default export that takes the JSDOM node as input. What it returns depends on whether or not there's a template file. If there's a template file, the controller should return an object representing data to be processed by the template. If there's no template file, the controller should return a string represending the HTML to swap in.
+1. **Controller:** The element name will be passed to `config.getControllerPath()`. That function should return a file path to a JS file, or falsy if no controller exists.
 
-2. **Template:** The element name will be passed to `config.getTemplatePath()`. That function should return a file path to a Liquid file, or null if no template exists. The input to this template will be either the output of the controller, or the entire tag from JSDOM.
+2. **Template:** The element name will be passed to `config.getTemplatePath()`. That function should return a file path to a Liquid file, or falsy if no template exists.
 
-Using these two files, the app will calculate an alternative fragment of HTML to swap in for the original element.
+The **controller** is must default export a function that takes the following params, in this order:
 
-The four possible resolution scenarios:
+1. The entire JSDOM node representing the element
+2. The element name, as a string
+3. The entire request object from Express
+
+It can return anything. If there's a template file, whatever it returns will be passed to the template as input. If there's no template file, whatever it returns will be swapped for the original element as a string.
+
+If no controller is found, `config.defaultElementController()` will be used.
+
+The **template** is a file containing template source. If this file exists, the app will create an object:
+
+```javascript
+{
+  data: [whatever the controller output, or the JSDOM node if there's no controller],
+  elementName: [the name of the element as a string],
+  query: [the querystring from the request object],
+  url: [the URL from the request object],
+  headers: [the headers from the request object]
+}
+```
+
+>The request object is broken apart because some templating languages (ahem, Liquid...) have issues allowing access to that object.
+
+This object and the source code from the template file will be passed to `config.executeTemplate()`. That function should execute whatever templating process it likes, then return the resulting string.
+
+So, there are four possible resolution scenarios:
 
 - **Both controller and template:** The app will pass the entire element to the default function of the controller and pass the output to the template under the key of `data`. The template output will be swapped in for the original element.
 
@@ -72,10 +88,10 @@ Example element to be resolved
 <user-profile data-user-id="123"></user-profile>
 ```
 
-Example controller: **userProfile.js**. This gets the entire element as a JSDOM node, and the API request from Express.
+Example controller: **userProfile.js**. This gets the entire element as a JSDOM node, the name of the element as a string, and the inbound request from Express.
 
 ```js
-export default function handleUserProfile(element, req)
+export default function handleUserProfile(element, elementName, req)
 {
   let id = element.dataset.userId;
   let userData = await fetch("https://myapi.com/users/" + id);
@@ -97,21 +113,35 @@ Example Template: **userProfile.liquid**. This gets an object with the output of
 </div>
 ```
 
+Whatever is produced from the above process will be passed to `config.getResolutionFragment()`. That method needs to return _valid HTML_ which will be swapped in for the original element.
+
+In the example `config.js`, existing HTML is passed back verbatim, while raw text strings are wrapped in a `div`.
+
 ## Finishing up
 
-Once all HTML and objects are resolved, a few logging properties are added to the response, and it is sent back as JSON.
+Once all HTML properties are resolved, a few logging properties are added to the response, and it is sent back as JSON.
 
 ## Random Notes
 
 ### Can I just resolve raw HTML strings instead of proxying an API call?
 
-Sure. `config.getHtmlEndpoint()` will provide an API to which you can POST your HTML as the raw body of the request. That HTML will be resolved according to the same process defined above, and sent back in the response.
+Sure. `config.getHtmlEndpoint()` will provide a route to which you can POST your HTML as the raw body of the request. That HTML will be resolved according to the same process defined above, and sent back in the response.
 
-> For some users, this might be the only thing used. It exposes the general HTML transformation logic. In those situations, the API proxy and JSON inspection parts of the app can simply be ignored.
+This might be handy for non-API processes, like webhook engines, that need to export HTML in some other method.
+
+Note that for some users, this might be the only thing used. It exposes the general HTML transformation logic. In those situations, the API proxy and JSON inspection parts of the app can simply be ignored.
 
 You can shut this feature off by just returning `null` from `config.getHtmlEndpoint()`.
 
-### How can I return different HTML resolutions for different channels?
+### Can I import the resolution code into my own JavaScript?
+
+...yes? I haven't tried it, but all the resolution stuff is in `resolver.js`, and that exports both `resolveObject()` and `resolveHtml()`. You won't have access to the request object, clearly, but all references to that are null-safe, so it should still work.
+
+### What templating engine can I use?
+
+Anything you like (the example uses LiquidJS). `config.executeTemplate()` gets the template source and the data object. Do whatever you want in here and return a string.
+
+### Can I return different HTML resolutions for different channels?
 
 Yes. The request is globally available, using AsyncLocalStorage. To get the request context in any code:
 
@@ -134,19 +164,19 @@ Using that, you can --
 
 1. Return a different controller or template path from `config.getControllerPath()` or `config.getTemplatePath()`
 2. Alter your logic in any controller
-3. Use the request values in your template, which are passed in as `query`, `headers`, and `url` (in the example, use `query.channel`)
+3. Use the request values in your template, which are passed in as `query`, `headers`, and `url` (in the example, you would reference `query.channel`)
 
 ### Do my controllers and templates have to be part of the project/codebase?
 
-No. `config.getControllerPath()` and `config.getTemplatePath()` can return absolute paths to wherever those files are located.
+No. `config.getControllerPath()` and `config.getTemplatePath()` can return absolute paths to wherever those files are located, they just have to be accessiable to Node.
+
+>QUESTION: Should those methods return strings (the file contents) instead of paths? Is it wrong to assume the code will always be on the local file system? Maybe you might want to get code from somewhere else? However, would importing strings rather than a file path make any imports inside the controller problematic?
 
 ### What are naming conventions for the controller and template files?
 
-That's up to you. Clearly, you're going to use the element name in some form, but you control what `config.getControllerPath` and `config.getTemplatePath` return, so do whatever you like.
+That's up to you. You're probably going to use the element name in some form, but you control what `config.getControllerPath()` and `config.getTemplatePath()` return, so do whatever you like.
 
-> Should those methods return strings (the file contents) instead of paths? Is it wrong to assume the code will always be on the local file system? Maybe you might want to get code from somewhere else?
-
-### Can I only identify elements by tag name?
+### Can I only identify resolvable elements by tag name?
 
 Not necesarily. `config.isElementResolvable()` gets the entire element, and it can do whatever it wants to figure out if the element needs to be resolved -- it can examine the tag name, attributes, content, time of day, phases of the moon, whatever.
 
@@ -154,19 +184,31 @@ Not necesarily. `config.isElementResolvable()` gets the entire element, and it c
 
 ### What if I want to remove elements rather than swap them?
 
-Just return "falsy" (`null`, `false`, `undefined`, etc.) from the controller. The element will be removed and nothing put in its place.
+Just return falsy from the controller. The element will be removed and nothing put in its place.
 
-Alterrnately, you can return `null` from `config.unknownEventController()`. This remove any element that doesn't have file-based controller, effectively allowing you to "whitelist" elements you want to handle (by creating controllers for them), and getting rid of everything else.
+Alternately, you can return falsy from `config.unknownEventController()`. This remove any element that doesn't have file-based controller, effectively allowing you to "whitelist" elements you want to handle (by creating controllers for them), and getting rid of everything else.
 
-There will be no trace of the elements that were removed. If you want to retain some record of them, return an HTML comment explaining what happened. For example, `return '<!-- Removed element ${elementName} -->';`
+There will be no trace of the elements that were removed. If you want to retain some record of them, return an HTML comment explaining what happened. For example
 
-You can also "comment out" the entire element by returning `<!-- ${element.outerHTML} -->`.
+```javascript
+return `<!-- Removed element ${elementName} -->`;
+```
+
+You can also "comment out" the entire element by simply returning
+
+```javascript
+return `<!-- ${element.outerHTML} -->`;
+```
 
 ### What if I want to leave an element alone?
 
-Well, ideally don't mark it as resolvable -- meaning don't return true from `config.isElementResolvable()` -- and it will be ignored.
+Well, ideally just don't mark it as resolvable -- meaning don't return truthy from `config.isElementResolvable()` -- and it will be ignored.
 
-If for whatever reason, you need to make a single exception, return `element.outerHTML` from the controller. You'll essentially replace it with itself.
+If for whatever reason, you need to make a single exception, return `element.outerHTML` from the controller and you'll essentially replace itthe element with itself.
+
+## What if I try to resolve an element that was removed by a previous resolution?
+
+This should just be inefficient. The second element object you resolve will still exist, it just won't be attached to the original document anymore. So you'll resolve it, but it won't matter.
 
 ### How is the performance?
 

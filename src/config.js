@@ -10,8 +10,22 @@ export default {
     return "/resolve-html";
   },
 
+  // Modifies the request URL if needed
+  getModifiedRequest: (req) => {
+    const TARGET_URL = "https://app.staffbase.com";
+    const url = `${TARGET_URL}${req.originalUrl}`;
+
+    return {
+      method: req.method,
+      url,
+      headers: { ...req.headers, host: new URL(TARGET_URL).host },
+      data: req.body,
+      validateStatus: () => true, // Allow handling of all status codes
+    };
+  },
+
   // This is the controller that executes when no controller can be found
-  unknownElementController: (element, elementName) => {
+  defaultElementController: (element, elementName, req) => {
     return `<!-- Unknown element: ${elementName} -->`;
   },
 
@@ -48,11 +62,15 @@ export default {
     return "./resolvers/" + elementName + "/" + elementName + ".liquid";
   },
 
-  // Returns value HTML to swap for the resolved element
-  getResolutionFragment: (element, elementName, content) =>
-  {
-    if (content[0] === "<" && content[content.length - 1] === ">")
-    {
+  // Executes the template with the given source and context and returns the result
+  executeTemplate: async (source, context) => {
+    const engine = new Liquid();
+    return await engine.parseAndRender(source, context);
+  },
+
+  // Returns valid HTML to swap for the resolved element
+  getResolutionFragment: (element, elementName, content) => {
+    if (content[0] === "<" && content[content.length - 1] === ">") {
       // If the content is parsable HTML, we return it as is
       const dom = new JSDOM(content);
       const document = dom.window.document;
@@ -64,36 +82,5 @@ export default {
     container.innerHTML = content;
 
     return container;
-  },
-
-  // Returns an array of the property paths to resolve
-  getPropertyPaths: () => {
-    return ["contents/en_US/content", "contents/de_DE/content"];
-  },
-
-  // Returns an array of object references to resolve
-  getObjectReferences: (data) => {
-    return data.data;
-  },
-
-  // Modifies the request URL if needed
-  getModifiedRequest: (req) =>
-  {
-    const TARGET_URL = "https://app.staffbase.com";
-    const url = `${TARGET_URL}${req.originalUrl}`;
-
-    return {
-      method: req.method,
-      url,
-      headers: { ...req.headers, host: new URL(TARGET_URL).host },
-      data: req.body,
-      validateStatus: () => true, // Allow handling of all status codes
-    };
-  },
-
-  executeTemplate: async (source, context) =>
-  {
-    const engine = new Liquid();
-    return await engine.parseAndRender(source, context);
   }
 };
