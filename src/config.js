@@ -2,31 +2,34 @@ import { JSDOM } from "jsdom";
 import { Liquid } from "liquidjs";
 
 export default {
+
+  // Specifies the port to listen on
   getPort: () => {
     return process.env.PORT || 3000;
   },
 
+  // Specifies the route for simple HTML requests
   getHtmlEndpoint: () => {
     return "/resolve-html";
   },
 
-  // Modifies the request URL if needed
+  // Modifies the request URL to point at the origin
   getModifiedRequest: (req) => {
-    const TARGET_URL = "https://app.staffbase.com";
-    const url = `${TARGET_URL}${req.originalUrl}`;
+    const TARGET_HOST = "https://app.staffbase.com";
+    const url = `${TARGET_HOST}${req.originalUrl}`;
 
     return {
       method: req.method,
       url,
-      headers: { ...req.headers, host: new URL(TARGET_URL).host },
+      headers: { ...req.headers, host: new URL(TARGET_HOST).host },
       data: req.body,
       validateStatus: () => true, // Allow handling of all status codes
     };
   },
 
-  // This is the controller that executes when no controller can be found
+  // The controller that executes when no controller can be found
   defaultElementController: (element, elementName, req) => {
-    return `<!-- Unknown element: ${elementName} -->`;
+    return ` <!-- Unknown element: ${elementName} -->`;
   },
 
   // Returns true if this element needs to be resolved
@@ -63,7 +66,7 @@ export default {
   },
 
   // Executes the template with the given source and context and returns the result
-  executeTemplate: async (source, context) => {
+  executeTemplate: async (source, context, path) => {
     const engine = new Liquid();
     return await engine.parseAndRender(source, context);
   },
