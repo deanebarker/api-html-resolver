@@ -206,9 +206,23 @@ Well, ideally just don't mark it as resolvable -- meaning don't return truthy fr
 
 If for whatever reason, you need to make a single exception, return `element.outerHTML` from the controller and you'll essentially replace itthe element with itself.
 
-## What if I try to resolve an element that was removed by a previous resolution?
+### What if I try to resolve an element that was removed by a previous resolution?
 
-This should just be inefficient. The second element object you resolve will still exist, it just won't be attached to the original document anymore. So you'll resolve it, but it won't matter.
+All elements are identified for resolution before any of them are actually resolved.
+
+>QUESTION: Should it be this way? I'm not sure, but I think so, because otherwise I think I'd need to re-parse the HTML after every resolution.
+
+So, if Element A is marked for resolution, and it contains Element B which is also marked for resolution, then resolving Element A will effectively remove Element B, even though Element B is still sitting in the resolutuion queue.
+
+But, ...this should just be inefficient, I think? Element B technically still "exists," but it's no longer attached to the original document -- so, it's just hanging out in memory. So you'll resolve it, but it won't matter.
+
+>QUESTION: Should I solve for this? How common will this scenario be?
+
+### What if I include a resolvable element in the fragment used for the resolution of another element?
+
+...don't. You certainly can, but the resolvable element you swap in won't be resolved.
+
+>QUESTION: Should I solve for this? Technically, I could keep resolving until no resolvable elements are still present -- so, I could make multiple "passes" over the HTML. But this could lead to a circular reference and infinite loop, and it seems like an edge case.
 
 ### How is the performance?
 
