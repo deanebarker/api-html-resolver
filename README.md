@@ -12,7 +12,7 @@ Essentially it sits "between" a client and an API to translate HTML included in 
 
 This is not JSONata -- this doesn't transform the structure of the JSON itself. Rather, it examines that JSON for HTML in specific properties, and it changes _that_.
 
-> Note that this tool was originally developed as a research project around the [Staffbase](https://staffbase.com/) API. However, its purpose and function turned out to be generic to any web-based API, and the logical method of HTML "resolution" is independent of even an API contact -- at its base level, it's just creative string manipulation.
+>Note that this tool was originally developed as a research project around the [Staffbase](https://staffbase.com/) API. However, its purpose and function turned out to be generic to any web-based API, and the logical method of HTML "resolution" is independent of even an API contact -- at its base level, it's just creative string manipulation.
 
 ## The config Object
 
@@ -137,10 +137,6 @@ You can shut this feature off by just returning `null` from `config.getHtmlEndpo
 
 ...yes? I haven't tried it, but all the resolution stuff is in `resolver.js`, and that exports both `resolveObject()` and `resolveHtml()`. You won't have access to the request object, clearly, but all references to that are null-safe, so it should still work.
 
-### What templating engine can I use?
-
-Anything you like (the example uses LiquidJS). `config.executeTemplate()` gets the template source and the data object. Do whatever you want in here and return a string.
-
 ### Can I return different HTML resolutions for different channels?
 
 Yes. The request is globally available, using AsyncLocalStorage. To get the request context in any code:
@@ -176,6 +172,13 @@ No. `config.getControllerPath()` and `config.getTemplatePath()` can return absol
 
 That's up to you. You're probably going to use the element name in some form, but you control what `config.getControllerPath()` and `config.getTemplatePath()` return, so do whatever you like.
 
+
+### What templating engine can I use?
+
+Anything you like (the example uses LiquidJS). `config.executeTemplate()` gets the template source and the data object. Do whatever you want in here and return a string.
+
+You can even use more than one. The path to the template file is passed into `config.executeTemplate()` so you can make template engine decisions based on on the file extension of the template.
+
 ### Can I only identify resolvable elements by tag name?
 
 Not necesarily. `config.isElementResolvable()` gets the entire element, and it can do whatever it wants to figure out if the element needs to be resolved -- it can examine the tag name, attributes, content, time of day, phases of the moon, whatever.
@@ -191,14 +194,16 @@ Alternately, you can return falsy from `config.unknownEventController()`. This r
 There will be no trace of the elements that were removed. If you want to retain some record of them, return an HTML comment explaining what happened. For example
 
 ```javascript
-return `<!-- Removed element ${elementName} -->`;
+return ` <!-- Removed element ${elementName} -->`;
 ```
 
 You can also "comment out" the entire element by simply returning
 
 ```javascript
-return `<!-- ${element.outerHTML} -->`;
+return ` <!-- ${element.outerHTML} -->`;
 ```
+
+**Important:** _You must include at least a leading or trailing space when returning an HTML comment_, because JSDOM will not parse a comment all by itself. To JSDOM, a string containing nothing but an HTML content is nothing, and it will parse it as `null`.
 
 ### What if I want to leave an element alone?
 
@@ -212,9 +217,9 @@ All elements are identified for resolution before any of them are actually resol
 
 >QUESTION: Should it be this way? I'm not sure, but I think so, because otherwise I think I'd need to re-parse the HTML after every resolution.
 
-So, if Element A is marked for resolution, and it contains Element B which is also marked for resolution, then resolving Element A will effectively remove Element B, even though Element B is still sitting in the resolutuion queue.
+So, if Element A is marked for resolution, and it contains Element B which is _also_ marked for resolution, then resolving Element A will remove Element B from the document, even though Element B is still sitting in the resolution queue.
 
-But, ...this should just be inefficient, I think? Element B technically still "exists," but it's no longer attached to the original document -- so, it's just hanging out in memory. So you'll resolve it, but it won't matter.
+But ...this should just be inefficient, I think? Element B technically still "exists," but it's no longer attached to the original document -- so, it's just hanging out in memory. So you'll still resolve it, but it won't matter.
 
 >QUESTION: Should I solve for this? How common will this scenario be?
 
