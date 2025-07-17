@@ -1,4 +1,4 @@
-<div class="infobox">
+<div class="infobox {{ data.type }}{% if data.onCard %} card{% endif %}">
   <h2>{{ data.title }}</h2>
   <div>
     {{ data.body }}

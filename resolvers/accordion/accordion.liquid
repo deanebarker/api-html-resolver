@@ -1,0 +1,8 @@
+<div class="accordion">
+{%- for panel in data.items %}
+<details>
+  <summary>{{ panel.title }}</summary>
+  <content>{{ panel.content }}</content>
+</details>
+{%- endfor -%}
+</div>
