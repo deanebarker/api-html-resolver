@@ -2,7 +2,7 @@ import { JSDOM } from "jsdom";
 import fs from "fs";
 import logger from "./logger.js";
 import config from "./config.js";
-import { request } from "./requestContext.js";
+import { addError, getContext } from "./contextManager.js";
 
 async function resolveElement(element) {
   /*
@@ -15,7 +15,7 @@ async function resolveElement(element) {
     If neither exists, it will be routed to the unknown resolver, which will just return the element as is.
     */
 
-  const req = request.get();
+  const req = getContext();
 
   // Determine the element name
   const elementName = config.getElementName(element, req);
@@ -32,9 +32,10 @@ async function resolveElement(element) {
         config.getControllerImportPath(elementName, req)
       );
     } catch (err) {
-      logger.error(
-        "Error compiling controller for " + elementName + ": " + err.message
-      );
+      const error =
+        "Error compiling controller for " + elementName + ": " + err.message;
+      addError(error);
+      logger.error(error);
       return;
     }
 
@@ -53,9 +54,10 @@ async function resolveElement(element) {
       }
       templateData = controllerReturnValue;
     } catch (err) {
-      logger.error(
-        "Error executing controller for " + elementName + ": " + err.message
-      );
+      const error =
+        "Error executing controller for " + elementName + ": " + err.message;
+      addError(error);
+      logger.error(error);
       return;
     }
   } else {
@@ -75,7 +77,7 @@ async function resolveElement(element) {
     };
     replaceValue(
       element,
-      await config.executeTemplate(templateSource, context)
+      await config.executeTemplate(templateSource, context, pathToTemplate)
     );
   } else {
     replaceValue(element, templateData);
@@ -93,8 +95,11 @@ async function resolveElement(element) {
 }
 
 export async function resolveHtml(html, propertyStack) {
-
-  logger.info(`Resolving HTML with property stack: ${propertyStack ? propertyStack.join(" > ") : "<root>"}`);
+  logger.info(
+    `Resolving HTML with property stack: ${
+      propertyStack ? propertyStack.join(" > ") : "<root>"
+    }`
+  );
 
   const dom = new JSDOM(html);
   const document = dom.window.document;
