@@ -15,72 +15,87 @@ async function resolveElement(element) {
     If neither exists, it will be routed to the unknown resolver, which will just return the element as is.
     */
 
-  const req = getContext();
+  const context = getContext();
 
   // Determine the element name
-  const elementName = config.getElementName(element, req);
+  const elementName = config.getElementName(element, context.req);
   logger.info("Resolving element: " + elementName);
 
-  let templateData = element; // We might replace this with the output of the controller
+  let templateData
 
-  // Controller
-  let controller;
-  if (fileExistsSync(config.getControllerPath(elementName, req))) {
-    // Compile the found controller
-    try {
-      controller = await import(
-        config.getControllerImportPath(elementName, req)
-      );
-    } catch (err) {
-      const error =
-        "Error compiling controller for " + elementName + ": " + err.message;
-      addError(error);
-      logger.error(error);
-      return;
-    }
-
-    // Execute the controller
-    try {
-      let controllerReturnValue = await controller.default(
-        element,
-        elementName,
-        req
-      );
-
-      // If the controller returns false, we remove the element
-      if (!controllerReturnValue) {
-        element.remove();
+  // Try to find a controller
+  let controller = null;
+  for(const path of config.getControllerPath(elementName, context.req)) {
+    if (fileExistsSync(path)) {
+      // Compile the found controller
+      try {
+          controller = await import("file://" + path)
+      } catch (err) {
+        const error =
+          "Error compiling controller for " + elementName + ": " + err;
+        addError(error);
+        logger.error(error);
         return;
       }
-      templateData = controllerReturnValue;
-    } catch (err) {
-      const error =
-        "Error executing controller for " + elementName + ": " + err.message;
-      addError(error);
-      logger.error(error);
-      return;
+
+      // Execute the controller
+      try {
+        let controllerReturnValue = await controller.default(
+          element,
+          elementName,
+          context.req
+        );
+
+        // If the controller returns false, we remove the element
+        if (!controllerReturnValue) {
+          element.remove();
+          return;
+        }
+        templateData = controllerReturnValue;
+      } catch (err) {
+        const error =
+          "Error executing controller for " + elementName + ": " + err;
+        addError(error);
+        logger.error(error);
+        return;
+      }
     }
-  } else {
-    templateData = config.defaultElementController(element, elementName, req);
+  }
+  if(!controller) {
+    // If no controller was found, we use the default element controller
+    logger.warn("No controller found for " + elementName + ", using default controller.");
+    templateData = config.defaultElementController(element, elementName, context.req);
   }
 
-  // Template
-  const pathToTemplate = config.getTemplatePath(elementName);
-  if (fileExistsSync(pathToTemplate)) {
-    const templateSource = fs.readFileSync(pathToTemplate, "utf8");
-    const context = {
-      data: templateData ?? element,
-      elementName,
-      query: req?.query,
-      headers: req?.headers,
-      url: req?.url,
-    };
+  // Try to find a template
+  let templateSource;
+  for (const pathToTemplate of config.getTemplatePath(elementName, context.req)) {
+    if (fileExistsSync(pathToTemplate)) {
+        templateSource = fs.readFileSync(pathToTemplate, "utf8");
+        const templateContext = {
+          data: templateData ?? element,
+          elementName,
+          query: context.req?.query,
+          headers: context.req?.headers,
+          url: context.req?.url,
+          language: context.req?.acceptsLanguages(),
+        };
+      replaceValue(
+        element,
+        await config.executeTemplate(
+          templateSource,
+          templateContext,
+          pathToTemplate
+        )
+      );
+    }
+  }
+  if (!templateSource) {
+    // If no template was found, just swap in whatever the controller returned
     replaceValue(
       element,
-      await config.executeTemplate(templateSource, context, pathToTemplate)
-    );
-  } else {
-    replaceValue(element, templateData);
+      templateData
+    )
   }
 
   // Replaces the original element with the new content

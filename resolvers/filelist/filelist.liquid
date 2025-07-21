@@ -1,7 +1,7 @@
 <div class="filelist{% if data.onCard %} card{% endif %}">
   <ul>
   {% for file in data.files -%}
-    <li><a href="{{ file.url }}" class="type-{{ file.type}}">{{ file.name }}</a></li>
+    <li><a href="/media/{{ file.url }}" class="type-{{ file.type}}">{{ file.name }}</a></li>
   {%- endfor %}
   </ul>
 </div>

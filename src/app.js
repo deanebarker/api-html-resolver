@@ -25,9 +25,10 @@ if (config.getHtmlEndpoint()) {
   });
 }
 
+
 // This is for a proxied API call
 app.use(async (req, res) => {
-  initContext(req);
+initContext(req);
 
   logger.info(`Received request: ${req.method} ${req.originalUrl}`);
 
@@ -38,9 +39,7 @@ app.use(async (req, res) => {
     // Make the origin request
     const tsStartOriginRequest = Date.now();
     const response = await axios(newConfig);
-    res.locals.log.push(
-      `Origin request time: ${Date.now() - tsStartOriginRequest} ms`
-    );
+    addNote(`Origin request time: ${Date.now() - tsStartOriginRequest} ms`);
 
     // Resolve the response data
     const tsStartResolution = Date.now();
@@ -54,7 +53,7 @@ app.use(async (req, res) => {
     };
     res.status(response.status).set(response.headers).send(response.data);
   } catch (err) {
-    logger.error(`Error processing request: ${err.message}`);
+    logger.error(`Error processing request: ${err}`);
     res.status(500).send("Proxy error");
   }
 });

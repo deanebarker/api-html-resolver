@@ -2,21 +2,23 @@ export default function handleFileList(element, elementName, req) {
   const onCard = element.dataset.widgetOnCard;
   const files = [];
 
-  for(const file of element.querySelectorAll("li")) {
+  for (const file of element.querySelectorAll("li")) {
+    const href = file.querySelector("a").href;
+    const url = new URL(href);
+    const filename = url.pathname.split("/").pop();
+
     files.push({
       name: file.querySelector("a").textContent,
-      url: file.querySelector("a").href,
-      type: file.dataset.type
-    })
+      url: filename,
+      type: file.dataset.type,
+    });
   }
 
   return {
     onCard,
-    files
-  }
-
+    files,
+  };
 }
-
 
 /*
 Sample element:

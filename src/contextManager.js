@@ -10,6 +10,8 @@ export function initContext(req) {
       errors: [],
     }
   );
+
+  return getContext();
 }
 
 export function addNote(note) {

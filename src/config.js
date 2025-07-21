@@ -1,8 +1,9 @@
 import { JSDOM } from "jsdom";
 import { Liquid } from "liquidjs";
+import { join } from "path";
+import { pathToFileURL } from "url";
 
 export default {
-
   // Specifies the port to listen on
   getPort: () => {
     return process.env.PORT || 3000;
@@ -48,21 +49,26 @@ export default {
     return elementName.toLowerCase();
   },
 
-  // Returns the file path of the controller
-  // This is relative to the app root
+  // Returns an array of potential file paths for the controller
+  // The app will use the first one that exists
   getControllerPath: (elementName) => {
-    return "./resolvers/" + elementName + "/" + elementName + ".js";
+    return [join(process.cwd(), "resolvers", elementName, elementName + ".js")];
   },
 
-  // Returns the import path of the controller (which might be different than the file path)
-  // This has to be relative to the resolver.js file
-  getControllerImportPath: (elementName) => {
-    return "../resolvers/" + elementName + "/" + elementName + ".js";
-  },
+  // Returns an array of potential file paths for the template
+  // The app will use the first one that exists
+  getTemplatePath: (elementName, req) => {
 
-  // Returns the file path of the template
-  getTemplatePath: (elementName) => {
-    return "./resolvers/" + elementName + "/" + elementName + ".liquid";
+    const possibleTemplatePaths = [];
+    for (const lang of req.acceptsLanguages()) {
+      const path = join(process.cwd(), "resolvers", elementName, elementName + `_${lang}.liquid`);
+      possibleTemplatePaths.push(path);
+    }
+
+    // Add the default template path if no language-specific template was found
+    possibleTemplatePaths.push(join(process.cwd(), "resolvers", elementName, elementName + ".liquid"));
+
+    return possibleTemplatePaths;
   },
 
   // Executes the template with the given source and context and returns the result
@@ -85,5 +91,5 @@ export default {
     container.innerHTML = content;
 
     return container;
-  }
+  },
 };
