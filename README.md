@@ -12,7 +12,7 @@ Essentially it sits "between" a client and an API to translate HTML included in 
 
 This is not JSONata -- this doesn't transform the structure of the JSON itself. Rather, it examines that JSON for HTML in specific properties, and it changes _that_.
 
->Note that this tool was originally developed as a research project around the [Staffbase](https://staffbase.com/) API. However, its purpose and function turned out to be generic to any web-based API, and the logical method of HTML "resolution" is independent of even an API contact -- at its base level, it's just creative string manipulation.
+> Note that this tool was originally developed as a research project around the [Staffbase](https://staffbase.com/) API. However, its purpose and function turned out to be generic to any web-based API, and the logical method of HTML "resolution" is independent of even an API contact -- at its base level, it's just creative string manipulation.
 
 ## The config Object
 
@@ -42,9 +42,9 @@ The element will be passed to `config.getElementName()` to identify the element 
 
 The app will use this name to look for two files:
 
-1. **Controller:** The element name will be passed to `config.getControllerPath()`. That function should return a file path to a JS file, or falsy if no controller exists.
+1. **Controller:** The element name and request object will be passed to `config.getControllerPath()`. That function should return an array of file paths to a JS file, or an empty array if no controller exists. The app will use the first controller file that it finds.
 
-2. **Template:** The element name will be passed to `config.getTemplatePath()`. That function should return a file path to a Liquid file, or falsy if no template exists.
+2. **Template:** The element name and request object will be passed to `config.getTemplatePath()`. That function should return an array of file paths to a template file, or an empty array if no template exists. The app will use the first template file that it finds.
 
 The **controller** is must default export a function that takes the following params, in this order:
 
@@ -68,7 +68,7 @@ The **template** is a file containing template source. If this file exists, the 
 }
 ```
 
->The request object is broken apart because some templating languages (ahem, Liquid...) have issues allowing access to that object.
+> The request object is broken apart because some templating languages (ahem, Liquid...) have issues allowing access to that object.
 
 This object and the source code from the template file will be passed to `config.executeTemplate()`. That function should execute whatever templating process it likes, then return the resulting string.
 
@@ -158,7 +158,7 @@ let channel = req.query.channel;
 
 Using that, you can --
 
-1. Return a different controller or template path from `config.getControllerPath()` or `config.getTemplatePath()`
+1. Form a different set of potential controller or template paths from `config.getControllerPath()` or `config.getTemplatePath()`
 2. Alter your logic in any controller
 3. Use the request values in your template, which are passed in as `query`, `headers`, and `url` (in the example, you would reference `query.channel`)
 
@@ -166,12 +166,11 @@ Using that, you can --
 
 No. `config.getControllerPath()` and `config.getTemplatePath()` can return absolute paths to wherever those files are located, they just have to be accessiable to Node.
 
->QUESTION: Should those methods return strings (the file contents) instead of paths? Is it wrong to assume the code will always be on the local file system? Maybe you might want to get code from somewhere else? However, would importing strings rather than a file path make any imports inside the controller problematic?
+> QUESTION: Should those methods return strings (the file contents) instead of paths? Is it wrong to assume the code will always be on the local file system? Maybe you might want to get code from somewhere else? However, would importing strings rather than a file path make any imports inside the controller problematic?
 
 ### What are naming conventions for the controller and template files?
 
 That's up to you. You're probably going to use the element name in some form, but you control what `config.getControllerPath()` and `config.getTemplatePath()` return, so do whatever you like.
-
 
 ### What templating engine can I use?
 
@@ -215,19 +214,19 @@ If for whatever reason, you need to make a single exception, return `element.out
 
 All elements are identified for resolution before any of them are actually resolved.
 
->QUESTION: Should it be this way? I'm not sure, but I think so, because otherwise I think I'd need to re-parse the HTML after every resolution.
+> QUESTION: Should it be this way? I'm not sure, but I think so, because otherwise I think I'd need to re-parse the HTML after every resolution.
 
 So, if Element A is marked for resolution, and it contains Element B which is _also_ marked for resolution, then resolving Element A will remove Element B from the document, even though Element B is still sitting in the resolution queue.
 
 But ...this should just be inefficient, I think? Element B technically still "exists," but it's no longer attached to the original document -- so, it's just hanging out in memory. So you'll still resolve it, but it won't matter.
 
->QUESTION: Should I solve for this? How common will this scenario be?
+> QUESTION: Should I solve for this? How common will this scenario be?
 
 ### What if I include a resolvable element in the fragment used for the resolution of another element?
 
 ...don't. You certainly can, but the resolvable element you swap in won't be resolved.
 
->QUESTION: Should I solve for this? Technically, I could keep resolving until no resolvable elements are still present -- so, I could make multiple "passes" over the HTML. But this could lead to a circular reference and infinite loop, and it seems like an edge case.
+> QUESTION: Should I solve for this? Technically, I could keep resolving until no resolvable elements are still present -- so, I could make multiple "passes" over the HTML. But this could lead to a circular reference and infinite loop, and it seems like an edge case.
 
 ### How is the performance?
 
